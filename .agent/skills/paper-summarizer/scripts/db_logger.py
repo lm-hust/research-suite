@@ -79,11 +79,12 @@ def check_hash(file_path):
     
     if row:
         paper_id, db_file_path, first_analyzed_at = row
-        # Fetch the latest summary title if exists
-        cursor.execute("SELECT title, summary_file_path FROM summaries WHERE paper_id = ? ORDER BY id DESC LIMIT 1", (paper_id,))
+        # Fetch the latest summary title and id if exists
+        cursor.execute("SELECT id, title, summary_file_path FROM summaries WHERE paper_id = ? ORDER BY id DESC LIMIT 1", (paper_id,))
         sum_row = cursor.fetchone()
-        title = sum_row[0] if sum_row else None
-        sum_path = sum_row[1] if sum_row else None
+        summary_id = sum_row[0] if sum_row else None
+        title = sum_row[1] if sum_row else None
+        sum_path = sum_row[2] if sum_row else None
         
         summary_file_exists = False
         if sum_path and os.path.exists(sum_path):
@@ -93,6 +94,7 @@ def check_hash(file_path):
             "exists": True,
             "match_by": "hash",
             "paper_id": paper_id,
+            "summary_id": summary_id,
             "db_file_path": db_file_path,
             "file_name": file_name,
             "file_hash": file_hash,
@@ -107,11 +109,12 @@ def check_hash(file_path):
         row_path = cursor.fetchone()
         if row_path:
             paper_id, db_file_hash, first_analyzed_at = row_path
-            # Fetch the latest summary title if exists
-            cursor.execute("SELECT title, summary_file_path FROM summaries WHERE paper_id = ? ORDER BY id DESC LIMIT 1", (paper_id,))
+            # Fetch the latest summary title and id if exists
+            cursor.execute("SELECT id, title, summary_file_path FROM summaries WHERE paper_id = ? ORDER BY id DESC LIMIT 1", (paper_id,))
             sum_row = cursor.fetchone()
-            title = sum_row[0] if sum_row else None
-            sum_path = sum_row[1] if sum_row else None
+            summary_id = sum_row[0] if sum_row else None
+            title = sum_row[1] if sum_row else None
+            sum_path = sum_row[2] if sum_row else None
             
             summary_file_exists = False
             if sum_path and os.path.exists(sum_path):
@@ -121,6 +124,7 @@ def check_hash(file_path):
                 "exists": True,
                 "match_by": "path",
                 "paper_id": paper_id,
+                "summary_id": summary_id,
                 "db_file_path": file_path,
                 "file_name": file_name,
                 "file_hash": file_hash,

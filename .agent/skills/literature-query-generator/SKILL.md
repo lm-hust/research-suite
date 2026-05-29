@@ -91,7 +91,7 @@ reversible hydropower pumped storage variable speed carbon neutrality energy sto
      - Proceed to Step 2 using the newly generated Markdown file path.
    - **Case B: The input is a Markdown (`.md`) file**:
      - Check if the Markdown file path exists in the database `summaries` table (querying the `summary_file_path` column).
-     - If it exists, capture its `id` as the `summary_id`.
+     - If it exists, capture its latest matched `id` (the highest ID value) as the `summary_id`.
      - If it does not exist (standalone/handwritten MD), the `summary_id` will be `null`.
      - Proceed to Step 2 using this Markdown file path.
 

@@ -68,5 +68,10 @@
   - Test PDF/DOCX delegation scenario: input a `.pdf`/`.docx` file, verify the agent routes it to `paper-summarizer`, generates the summary card, then builds and stores queries linked to the generated card's database record
 - [x] 8.6 Commit updated script, `SKILL.md`, `literature-query-generator.md` workflow, and documentation changes
 
+## 9. Latest Summary Run Alignment
 
-
+- [x] 9.1 Refactor `resolve_summary_id()` in `db_logger.py` to query matching `summary_file_path` records sorted by `id DESC LIMIT 1` (ensuring lookup yields the most recent summary run)
+- [x] 9.2 Update `.agent/skills/literature-query-generator/SKILL.md` instructions to specify that query linkage must always match the latest summary run record in summaries table
+- [x] 9.3 Perform integration verification:
+  - Re-run query builder for a document with multiple summaries rows (e.g. ID 1 and ID 2) and check that it resolves to the latest ID (ID 2) and does not skip query generation as duplicate (since queries for ID 2 are absent)
+- [x] 9.4 Commit updated files and documentation changes

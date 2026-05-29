@@ -83,7 +83,7 @@ This mirrors the modular pattern established by `paper-summarizer`.
 | Risk | Mitigation |
 |------|-----------|
 | LLM extracts irrelevant or sub-optimal keywords from complex MD files | Skill prompt rules instruct the LLM to read the entire MD file, understand the scientific concepts, and synthesize precise, relevant keyword terms. The user/agent can also review and manually override if needed. |
-| `summaries` table lookup by `summary_file_path` may fail if paths change | Store relative paths in `summaries`; lookup uses `os.path.abspath` normalization |
+| `summaries` table lookup by `summary_file_path` may fail due to slash formatting differences or match stale summary runs when a paper is re-summarized | Normalize all path candidates to check both forward and backward slashes, and resolve to the latest (highest ID) `summaries.id` row |
 | Duplicate detection relies on `(md_file_path, database)` uniqueness — re-running on unchanged file always skips | Add a `--force` flag to `format_queries.py` to allow deliberate re-generation |
 | `example.db` schema diverges from `paper-summarizer` over time | Both skills define tables with `CREATE TABLE IF NOT EXISTS`; divergence only matters if column definitions conflict — document this constraint |
 

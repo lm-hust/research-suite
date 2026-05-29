@@ -4,8 +4,8 @@
 The skill SHALL write each generated query string to the `queries` table in `data/research.db`. One row SHALL be inserted per database target (WOS, Scopus, SemanticScholar, OpenAlex, CrossRef), totalling five rows per successful invocation.
 
 #### Scenario: MD file is a known summary card
-- **WHEN** the input Markdown file path matches a `summary_file_path` value in the `summaries` table
-- **THEN** each inserted `queries` row SHALL have `summary_id` set to the matching `summaries.id`, and `md_file_path` SHALL be NULL
+- **WHEN** the input Markdown file path matches one or more `summary_file_path` values in the `summaries` table
+- **THEN** each inserted `queries` row SHALL have `summary_id` set to the *latest* matching `summaries.id` (i.e. the one with the highest ID value), and `md_file_path` SHALL be NULL
 
 #### Scenario: MD file is hand-written (not in summaries table)
 - **WHEN** the input Markdown file path does NOT match any `summary_file_path` in the `summaries` table

@@ -103,7 +103,7 @@ def resolve_summary_id(md_file_path: str):
     summary_id = None
     for candidate in candidates:
         cursor.execute(
-            "SELECT id FROM summaries WHERE summary_file_path = ?",
+            "SELECT id FROM summaries WHERE summary_file_path = ? ORDER BY id DESC LIMIT 1",
             (candidate,)
         )
         row = cursor.fetchone()
