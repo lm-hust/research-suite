@@ -1,0 +1,1 @@
+# literature-query-generator package
