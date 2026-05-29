@@ -86,8 +86,8 @@ reversible hydropower pumped storage variable speed carbon neutrality energy sto
    Identify the input file format:
    - **Case A: The input is a PDF (`.pdf`) or DOCX (`.docx`) file**:
      - Automatically trigger/delegate to the `paper-summarizer` skill on the paper path first.
-     - The `paper-summarizer` skill will generate a summary card at `data/papers/summaries/<basename>_summary.md` and insert a record into the `summaries` table.
-     - Capture the generated summary's Markdown content and the newly logged `summary_id` from the summarizer run output.
+     - If the `paper-summarizer` skill returns `false` or aborts with an error indicating the input document is not a research/academic-related document, immediately abort this workflow and do not generate queries.
+     - Otherwise, capture the generated summary's Markdown content and the newly logged `summary_id` from the summarizer run output.
      - Proceed to Step 2 using the newly generated Markdown file path.
    - **Case B: The input is a Markdown (`.md`) file**:
      - Check if the Markdown file path exists in the database `summaries` table (querying the `summary_file_path` column).

@@ -39,12 +39,12 @@ python .agent/skills/paper-summarizer/scripts/db_logger.py check-hash "<path_to_
 - **If the JSON response indicates `exists: true`**:
   - Retrieve the `summary_file_path` and `summary_file_exists` from the JSON response.
   - **Case A: The Markdown summary file EXISTS (`summary_file_exists` is `true`)**:
-    - Bypass Step 3, Step 4, and Step 5 entirely.
+    - Bypass Step 3, Step 4, Step 5, and Step 6 entirely.
     - Directly read the contents of the existing Markdown file.
-    - Proceed to Step 6 to render it in the chat window.
+    - Proceed to Step 7 to render it in the chat window.
   - **Case B: The Markdown summary file does NOT exist (`summary_file_exists` is `false`)**:
     - Inform the user: *"This paper was previously analyzed, but its Markdown summary card has been deleted. Automatically regenerating the summary..."*
-    - Proceed to Step 3 to re-run text extraction, fact extraction, card writing, and database logging.
+    - Proceed to Step 3 to re-run text extraction, academic validity check, fact extraction, card writing, and database logging.
 
 ### Step 3: Run Text Extraction
 Route the literature file to the correct parsing mechanism:
@@ -58,7 +58,17 @@ Route the literature file to the correct parsing mechanism:
   ```
 - **TXT / MD File**: Read the file contents directly.
 
-### Step 4: High-Density Fact Extraction
+### Step 4: Academic/Research Validity Check (Mandatory)
+Evaluate whether the extracted text represents a scientific, technical, or academic-related research paper or literature document (e.g. contains standard academic structures, research methodology, technical study details, or experiment/evaluation data).
+- **If the document is NOT a research or academic-related publication**:
+  - Immediately abort execution.
+  - Return `false` (no output/summary card generated).
+  - Do NOT save any Markdown summary card under `data/papers/summaries/`.
+  - Do NOT log or insert this file into the database (do NOT execute the SQLite logger script `db_logger.py log`).
+  - Print a clear message to the user: `Error: Input document is not a research or academic-related publication.` and stop.
+- **If it is a valid academic document**, proceed to Step 5.
+
+### Step 5: High-Density Fact Extraction
 Analyze the extracted text and extract the following structured details strictly from the document. Do NOT guess, extrapolate, or hallucinate metadata (such as authors or years) from references, citations, or external knowledge:
 - **Title**: Academic paper title. If not explicitly stated, extract the main heading or use "Unknown".
 - **Authors**: Authors list. Extract strictly from the author list or header. If not explicitly listed, use "Unknown". Do NOT guess or invent authors from citations, references, or footnotes.
@@ -68,7 +78,7 @@ Analyze the extracted text and extract the following structured details strictly
 - **Evaluation Data**: Key datasets, experimental results, and metric comparisons (2-3 sentences)
 - **Limitations**: Acknowledged limitations, caveats, or future work directions (2-3 sentences)
 
-### Step 5: Save Markdown Card and Log to SQLite
+### Step 6: Save Markdown Card and Log to SQLite
 1. Format the extracted facts into the standard Markdown Summary Card template (defined below).
 2. Save the card to: `data/papers/summaries/<paper_basename>_summary.md` (replace extension with `_summary.md`).
 3. Prepare the metadata JSON string containing keys: `title`, `authors`, `publication_year`, `motivation`, `methodology`, `evaluation_data`, `limitations`.
@@ -77,7 +87,7 @@ Analyze the extracted text and extract the following structured details strictly
    python .agent/skills/paper-summarizer/scripts/db_logger.py log "<path_to_paper>" "data/papers/summaries/<paper_basename>_summary.md" '<metadata_json>'
    ```
 
-### Step 6: Render Card in Chat
+### Step 7: Render Card in Chat
 Output the Markdown Summary Card in full within the current chat window.
 
 ---
