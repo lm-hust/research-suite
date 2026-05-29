@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local data databases and files (ignore databases and all documents/summaries)
+data/*.db
+data/papers/*
+!data/papers/summaries/
+data/papers/summaries/*
+
+# Keep directory structure in Git
+!data/papers/.gitkeep
+!data/papers/summaries/.gitkeep
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# OS-generated files
+.DS_Store
+Thumbs.db

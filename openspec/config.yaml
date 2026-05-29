@@ -1,0 +1,28 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+context: |
+  WORKSPACE HYGIENE & CONSTITUTIONAL RULES:
+  1. Clean Workspace Rule: Every time you generate temporary files or directories (e.g., for testing, prototyping, scratch scripts, or validation), you must clean them up and delete them completely once testing or validation is done. Do not leave any temporary, untracked, or stray files in the workspace.
+  2. Testing & Scratch Cleanup: If a temporary file is created to run a test, delete it once the test execution finishes. If a temporary directory is created, remove it and all its contents when the validation step is completed.
+  3. Skill Development Rule: When creating, defining, modifying, or developing agent skills (located in `.agent/skills/`), you must strictly employ the `skill-creator` skill workflow. Follow the `skill-creator` lifecycle (capturing intent, interviewing, writing standard-structured `SKILL.md` files with progressive disclosure, creating test cases, running comparisons, capturing timing metrics, and optimizing triggering descriptions).
+
+  DESIGN & ARCHITECTURE PARADIGMS:
+  1. Modular & Granular Design Rule: In all systems, files, databases, or program schemas you design, you must always adhere to modular and granular design principles. Avoid monoliths or bloated single tables. For example, split data tables into logical, normalized entities (e.g., separating raw file metadata from analysis executions/summaries, using foreign keys, and calculating content hashes for content-based deduplication). Split code and scripts into single-purpose, focused helper modules rather than massive single scripts.
+
+  SCIENTIFIC RIGOR & FACTUALITY RULE:
+  1. No Hallucination or Guessing: Any design, specification, proposal, or task related to processing, extracting, or generating research literature, scientific data, or academic materials MUST strictly forbid guessing, fabricating, or hallucinating details (such as authors, publication years, or missing metrics).
+  2. Unknown Fallback: If any metadata, metric, or fact is not explicitly present in the input material, the system design and implementation MUST mandate returning "Unknown", `null`, or leaving it blank, rather than making guesses or extrapolating from citations/references.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+

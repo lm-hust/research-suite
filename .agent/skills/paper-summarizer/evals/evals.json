@@ -1,0 +1,17 @@
+{
+  "skill_name": "paper-summarizer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Summarize the document at data/papers/sample_attention.docx",
+      "expected_output": "Should extract: Title: Attention Is All You Need, Motivation: Recurrent models preclude parallelization, Methodology: 6 encoder/decoder layers, Evaluation: 28.4 BLEU score, Limitations: Quadratic complexity O(n^2)",
+      "files": ["data/papers/sample_attention.docx"]
+    },
+    {
+      "id": 2,
+      "prompt": "Summarize the document at data/papers/sample_transformer.pdf",
+      "expected_output": "Should extract: Title: Transformer Architecture: High-Density Summary, Motivation: RNN sequential computation bottleneck, Methodology: Multi-Head Attention, Evaluation: 28.4 BLEU, Limitations: Quadratic O(n^2) complexity",
+      "files": ["data/papers/sample_transformer.pdf"]
+    }
+  ]
+}
