@@ -20,14 +20,19 @@ Generate validated academic search query strings for five major databases from a
    - If the `paper-summarizer` workflow aborts or returns `false` due to academic validity check failure, abort this workflow immediately.
    - Otherwise, capture the resulting `summary_id` and `summary_content`.
 
-3. **Semantic Keyword Synthesis (LLM-driven)**:
+3. **Database Query Cache Check**:
+   - Query the `queries` table for pre-existing records matching the retrieved `summary_id` across the five target databases (unless `--force` is specified).
+   - If queries for all 5 databases exist, bypass Step 4 and Step 5 entirely, directly retrieve the stored query strings, and proceed to Step 6.
+   - If one or more database queries are missing, proceed to Step 4.
+
+4. **Semantic Keyword Synthesis (LLM-driven)**:
    - Read the `summary_content`.
    - Use LLM to semantically analyze the concepts and synthesize 3-10 optimal search keywords.
 
-4. **Generate and Store Queries**:
+5. **Generate and Store Queries**:
    - Execute the formatting script, passing the synthesized keywords via the `--keywords` parameter:
      ```bash
      python .agent/skills/literature-query-generator/scripts/format_queries.py <summary_id> --keywords "<comma_separated_keywords>" [--exact-scopus] [--force]
      ```
 
-5. **Output**: Render the generated query strings in a formatted Markdown block in the chat window, indicating the associated summary ID.
+6. **Output**: Render the generated query strings in a formatted Markdown block in the chat window, indicating the associated summary ID.

@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS queries (
 **Choice:** Before initiating execution or calling the `paper-summarizer` skill, check if `data/research.db` exists and contains the `queries` table. If the database file does not exist, or if it exists but does NOT contain the `queries` table, delete the database file (if present), copy the existing `.agent/skills/paper-summarizer/assets/example.db` to `data/research.db`, and programmatically create the `queries` table inside it using a SQL statement.
 **Rationale:** Reuses the existing `example.db` template from the `paper-summarizer` skill instead of duplicating binary assets inside the new skill's directory, ensuring a clean and consistent database state.
 
+### Decision 5: Database Query Cache Check Short-Circuiting
+**Choice:** If all five database queries (Web of Science, Scopus, Semantic Scholar, OpenAlex, CrossRef) already exist in the database for the resolved `summary_id` (and `--force` is NOT specified), the workflow short-circuits: it skips LLM keyword synthesis and formatter script execution entirely, reading the query strings directly from SQLite and rendering them.
+**Rationale:** Saves token costs and significantly speeds up execution on repeat runs of the same document by bypassing the LLM call when all queries are already cached.
+
 ## Risks / Trade-offs
 
 | Risk | Mitigation |

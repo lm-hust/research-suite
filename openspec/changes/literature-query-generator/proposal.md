@@ -8,7 +8,8 @@ Researchers need to build Boolean search queries for multiple academic databases
 
 - **Simplified Routing**: The `/literature-query-generator` command accepts any input file (`.pdf`, `.docx`, `.md`, `.txt`) and immediately delegates it to the `paper-summarizer` skill.
 - **Database Initialization Precondition**: Before calling `paper-summarizer`, the workflow checks if `data/research.db` contains the `queries` table. If the database is missing or does not contain `queries`, it deletes the database file (if present), copies the existing `example.db` from the `paper-summarizer` skill's assets, and programmatically creates the `queries` table inside it.
-- **Unified Query Generation**: The workflow retrieves the `summary_id` and `summary_content` returned by `paper-summarizer`, uses LLM semantic keyword synthesis on the summary content, and runs a streamlined Python script to format and persist the queries.
+- **Database Query Cache Check**: Prior to running query synthesis, the workflow checks if all five database queries already exist in the database for the resolved `summary_id`. If so, it bypasses LLM synthesis and formatting script execution entirely, reading the existing query strings directly from the database.
+- **Unified Query Generation**: If one or more database queries are missing, the workflow retrieves the `summary_id` and `summary_content` returned by `paper-summarizer`, uses LLM semantic keyword synthesis on the summary content, and runs a streamlined Python script to format and persist the queries.
 - **Streamlined Database Schema**: The `queries` table is simplified to use a non-null foreign key `summary_id` referencing `summaries(id)`. We remove the `md_file_path` column entirely.
 - **Workflow Command**: The workflow trigger `.agent/workflows/literature-query-generator.md` is updated to implement this direct calling chain.
 

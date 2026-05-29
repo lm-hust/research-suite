@@ -23,9 +23,11 @@
 ## 5. Write Simplified SKILL.md
 - [x] 5.1 Document the database check precondition and the direct delegation step: call `paper-summarizer` first for all files, check if it aborts, and extract output
 - [x] 5.2 Document the keyword synthesis and script execution steps
+- [x] 5.3 Document Database Query Cache Check step in SKILL.md and workflow trigger
 
 ## 6. Verification
 - [x] 6.1 Verify delegation to `paper-summarizer` for PDF/DOCX and MD files
 - [x] 6.2 Verify that non-academic files abort early and generate no queries or database records
 - [x] 6.3 Verify deduplication and `--force` flag operations
 - [x] 6.4 Verify database check and copy precondition (when DB file is missing, or lacks queries table, verify it is replaced by example.db)
+- [x] 6.5 Verify query cache check bypass (LLM synthesis skipped when all 5 queries exist)
