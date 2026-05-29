@@ -2,7 +2,7 @@
 
 The `paper-summarizer` skill already writes structured Markdown summary cards to `data/papers/summaries/` and logs metadata to `data/research.db` (`papers` + `summaries` tables). Researchers must then manually craft Boolean search strings for each target database — a tedious, error-prone step that produces non-reproducible queries.
 
-The `literature-query-generator` skill plugs into this workflow as a downstream step: it reads an MD file (structured or ad-hoc), extracts key search concepts, generates correctly-formatted query strings for each target database, and persists the results.
+The `literature-query-generator` skill plugs into this workflow by acting as a universal query builder. It accepts Markdown (.md), PDF (.pdf), or DOCX (.docx) files. For Markdown inputs, it checks the database to see if it is an existing summary and links queries accordingly. For raw PDF or DOCX files, it delegates summary generation to `paper-summarizer` first, then generates and links queries to the newly created summary database record.
 
 Current constraints:
 - `data/research.db` schema must not change for existing tables (`papers`, `summaries`).
@@ -12,16 +12,18 @@ Current constraints:
 ## Goals / Non-Goals
 
 **Goals:**
-- Accept any Markdown file as input (structured summary card or hand-written notes).
+- Accept Markdown (.md), PDF (.pdf), and DOCX (.docx) files as input, routing them based on file format.
+- Integrate with the `paper-summarizer` skill to process raw PDF/DOCX documents first before constructing queries.
+- Query database `summaries` table to lookup matching entries for input Markdown paths to maintain referential integrity.
 - Produce per-database query strings for: Web of Science, Scopus, Semantic Scholar, OpenAlex, CrossRef.
 - Validate query syntax (balanced parentheses/brackets, no illegal characters per database).
 - Persist queries to `data/research.db` in a new `queries` table with a nullable FK to `summaries.id`.
-- Deduplicate: do not re-insert a query if the same MD file + database combination already has a row.
+- Deduplicate: do not re-insert a query if the same MD file (or its summary ID) + database combination already has a row.
 - Ship a self-contained `assets/example.db` containing the full three-table schema for fresh-clone scenarios.
 
 **Non-Goals:**
 - Executing queries against live databases (no HTTP requests).
-- Modifying `papers` or `summaries` tables.
+- Modifying `papers` or `summaries` tables (except transitively when delegating to `paper-summarizer` which registers them).
 - Producing relevance-ranked results.
 - Supporting databases beyond the five listed above in this version.
 
@@ -49,11 +51,11 @@ Current constraints:
 
 ### Decision 3: Keyword extraction strategy
 
-**Choice:** Heuristic extraction from MD content — scan for `**Keywords**` / `## Keywords` sections first; fall back to noun-phrase extraction from headings and bold text.
+**Choice:** LLM-based semantic keyword synthesis/extraction from the entire Markdown content, passed via command-line arguments to the script, with local regex heuristics maintained as a fallback.
 
-**Rationale:** `paper-summarizer` cards have a predictable `## Keywords` section. Hand-written MDs do not; a graceful fallback prevents hard failures. No NLP libraries are available (standard library constraint), so the fallback uses regex-based heading and bold-text scanning.
+**Rationale:** Regex-based heuristic keyword extraction is blind to semantic context and can produce poor-quality, noisy query terms from free-form or non-standard Markdown files. By using the LLM to read the entire document, understand its core scientific contributions, and synthesize the most appropriate search terms, we generate queries of much higher relevance. We pass these terms to the Python script to leverage its deterministic formatting, validation, and database operations.
 
-**Alternative considered:** Requiring a structured YAML front-matter block in all input MDs — rejected as it imposes a format on users writing ad-hoc notes.
+**Alternative considered:** Generating raw SQL or formatted queries entirely via LLM without a supporting script — rejected because deterministic validation (parentheses balancing, query escaping, exact/fuzzy rules) and database integrity checks (deduplication, relative path resolution) are safer and more robust when handled by code.
 
 ---
 
@@ -80,7 +82,7 @@ This mirrors the modular pattern established by `paper-summarizer`.
 
 | Risk | Mitigation |
 |------|-----------|
-| Keyword extraction produces low-quality terms from free-form MDs | Skill prompt rules instruct the LLM to review extracted keywords before finalizing; output is human-readable before DB insert |
+| LLM extracts irrelevant or sub-optimal keywords from complex MD files | Skill prompt rules instruct the LLM to read the entire MD file, understand the scientific concepts, and synthesize precise, relevant keyword terms. The user/agent can also review and manually override if needed. |
 | `summaries` table lookup by `summary_file_path` may fail if paths change | Store relative paths in `summaries`; lookup uses `os.path.abspath` normalization |
 | Duplicate detection relies on `(md_file_path, database)` uniqueness — re-running on unchanged file always skips | Add a `--force` flag to `format_queries.py` to allow deliberate re-generation |
 | `example.db` schema diverges from `paper-summarizer` over time | Both skills define tables with `CREATE TABLE IF NOT EXISTS`; divergence only matters if column definitions conflict — document this constraint |

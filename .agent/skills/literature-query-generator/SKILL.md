@@ -1,11 +1,11 @@
 ---
 name: literature-query-generator
-description: Generate syntactically validated Boolean search queries for Web of Science, Scopus, Semantic Scholar, OpenAlex, and CrossRef from any Markdown file. Use this skill whenever the user wants to find similar papers, build literature search strings, translate a paper summary into database queries, or generate reproducible search expressions for academic databases. Trigger this skill even when the user just mentions "search for similar papers", "generate search queries", "find related literature", or "how do I search for this on Web of Science / Scopus / Semantic Scholar / OpenAlex / CrossRef".
+description: Generate syntactically validated Boolean search queries for Web of Science, Scopus, Semantic Scholar, OpenAlex, and CrossRef from any Markdown file, PDF, or DOCX paper. Use this skill whenever the user wants to find similar papers, build literature search strings, translate a paper summary into database queries, or generate reproducible search expressions for academic databases. Trigger this skill even when the user just mentions "search for similar papers", "generate search queries", "find related literature", or "how do I search for this on Web of Science / Scopus / Semantic Scholar / OpenAlex / CrossRef".
 ---
 
 # Literature Query Generator
 
-Generate validated, database-specific search query strings from any Markdown file — whether produced by the `paper-summarizer` skill or hand-written notes.
+Generate validated, database-specific search query strings from any literature file (Markdown summaries, PDF, or DOCX papers).
 
 Outputs ready-to-paste query strings for five databases, and persists them to `data/research.db` for reproducibility.
 
@@ -13,7 +13,10 @@ Outputs ready-to-paste query strings for five databases, and persists them to `d
 
 ## Inputs
 
-- **Required**: A path to a Markdown file (summary card or hand-written notes).
+- **Required**: A path to a literature file. Supported formats:
+  - Markdown (`.md`): Structured summary card or hand-written notes.
+  - PDF (`.pdf`): Raw academic paper.
+  - Word Document (`.docx`): Raw academic paper.
 - **Optional flags**:
   - `--exact-scopus` — Use Scopus exact-phrase mode (curly braces `{}` instead of double quotes; no wildcards).
   - `--force` — Re-generate queries even if they already exist in the database.
@@ -79,18 +82,36 @@ reversible hydropower pumped storage variable speed carbon neutrality energy sto
 
 ## Steps
 
-1. **Identify the input MD file** from the user's argument or prompt them to select from `data/papers/summaries/`.
+1. **Routing and Format Handling**:
+   Identify the input file format:
+   - **Case A: The input is a PDF (`.pdf`) or DOCX (`.docx`) file**:
+     - Automatically trigger/delegate to the `paper-summarizer` skill on the paper path first.
+     - The `paper-summarizer` skill will generate a summary card at `data/papers/summaries/<basename>_summary.md` and insert a record into the `summaries` table.
+     - Capture the generated summary's Markdown content and the newly logged `summary_id` from the summarizer run output.
+     - Proceed to Step 2 using the newly generated Markdown file path.
+   - **Case B: The input is a Markdown (`.md`) file**:
+     - Check if the Markdown file path exists in the database `summaries` table (querying the `summary_file_path` column).
+     - If it exists, capture its `id` as the `summary_id`.
+     - If it does not exist (standalone/handwritten MD), the `summary_id` will be `null`.
+     - Proceed to Step 2 using this Markdown file path.
 
-2. **Run the query generation script**:
-   ```
-   python .agent/skills/literature-query-generator/scripts/format_queries.py <md_file_path> [--exact-scopus] [--force]
-   ```
+2. **Semantic Keyword Synthesis (LLM-Driven)**:
+   - Read the entire Markdown summary content (either the existing file, or the newly generated summary card).
+   - Use LLM capability to analyze the document's context, research goals, methods, and findings.
+   - Synthesize a set of high-relevance search keywords/phrases (typically 3 to 10 terms) that best represent the paper for literature retrieval. Do not rely on local regex/heading heuristics.
 
-3. **Parse the JSON output** — it contains:
-   - `_meta`: keywords extracted, summary_id link, flags used
-   - `WOS`, `Scopus`, `SemanticScholar`, `OpenAlex`, `CrossRef`: each with `query` (success) or `error` / `skipped` (failure/duplicate)
+3. **Execute Query Generation and Storage**:
+   - Run the formatting script, passing the normalized Markdown file path and the LLM-derived keywords (comma-separated) via the `--keywords` parameter:
+     ```bash
+     python .agent/skills/literature-query-generator/scripts/format_queries.py "<md_file_path>" --keywords "<comma_separated_keywords>" [--exact-scopus] [--force]
+     ```
+     *(Note: Always wrap paths and keywords in double quotes to handle spaces correctly).*
 
-4. **Render the queries** in a clean Markdown block in the chat:
+4. **Parse JSON Output**:
+   - Parse the JSON output printed by the script. If the query already exists, the script will output `"skipped": true` (unless `--force` was used).
+
+5. **Render Results in Chat**:
+   - Format the queries in a clean Markdown output for the user:
 
 ```markdown
 ## 🔍 Search Queries
@@ -110,13 +131,13 @@ TITLE-ABS-KEY("reversible hydropower" AND "pumped storage" AND ...)
 reversible hydropower pumped storage variable speed ...
 \`\`\`
 
-> Keywords extracted: reversible hydropower, pumped storage, variable speed, ...
-> Stored to `data/research.db` (queries table) ✓
+> Keywords synthesized: reversible hydropower, pumped storage, variable speed, ...
+> Stored to `data/research.db` (queries table) linked to summary ID: <summary_id_or_NULL> ✓
 ```
 
-5. **If `skipped: true`** appears for any database, inform the user queries already exist and suggest using `--force` to regenerate.
+6. **If `skipped: true`** appears for any database, inform the user queries already exist and suggest using `--force` to regenerate.
 
-6. **If `error`** appears for any database, explain the validation issue and suggest fixing the keyword extraction or using `--exact-scopus` if curly braces were the problem.
+7. **If `error`** appears for any database, explain the validation issue.
 
 ---
 

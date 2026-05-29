@@ -65,6 +65,29 @@ def init_db():
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _get_path_candidates(md_file_path: str) -> list:
+    """Return all slash-normalized versions of the input path candidate."""
+    if not md_file_path:
+        return []
+    raw = [
+        md_file_path,
+        os.path.normpath(md_file_path),
+    ]
+    try:
+        raw.append(os.path.abspath(md_file_path))
+        raw.append(os.path.relpath(md_file_path))
+    except Exception:
+        pass
+
+    candidates = []
+    for r in raw:
+        candidates.append(r)
+        candidates.append(r.replace('\\', '/'))
+        candidates.append(r.replace('/', '\\'))
+
+    return list(dict.fromkeys(candidates))
+
+
 def resolve_summary_id(md_file_path: str):
     """Return the summaries.id whose summary_file_path matches md_file_path.
 
@@ -75,11 +98,7 @@ def resolve_summary_id(md_file_path: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    candidates = list(dict.fromkeys([
-        os.path.normpath(md_file_path),
-        os.path.normpath(os.path.abspath(md_file_path)),
-        os.path.normpath(os.path.relpath(md_file_path)),
-    ]))
+    candidates = _get_path_candidates(md_file_path)
 
     summary_id = None
     for candidate in candidates:
@@ -111,20 +130,23 @@ def check_duplicate(summary_id, md_file_path: str, database: str) -> bool:
             "SELECT 1 FROM queries WHERE summary_id = ? AND database = ? LIMIT 1",
             (summary_id, database)
         )
+        exists = cursor.fetchone() is not None
     else:
-        norm = os.path.normpath(md_file_path)
-        norm_abs = os.path.normpath(os.path.abspath(md_file_path))
-        norm_rel = os.path.normpath(os.path.relpath(md_file_path))
-        cursor.execute(
-            """SELECT 1 FROM queries
-               WHERE summary_id IS NULL
-               AND database = ?
-               AND (md_file_path = ? OR md_file_path = ? OR md_file_path = ?)
-               LIMIT 1""",
-            (database, norm, norm_abs, norm_rel)
-        )
+        candidates = _get_path_candidates(md_file_path)
+        exists = False
+        for candidate in candidates:
+            cursor.execute(
+                """SELECT 1 FROM queries
+                   WHERE summary_id IS NULL
+                   AND database = ?
+                   AND md_file_path = ?
+                   LIMIT 1""",
+                (database, candidate)
+            )
+            if cursor.fetchone():
+                exists = True
+                break
 
-    exists = cursor.fetchone() is not None
     conn.close()
     return exists
 
@@ -170,11 +192,7 @@ def get_queries_for_md(md_file_path: str) -> list:
             (summary_id,)
         )
     else:
-        candidates = list(dict.fromkeys([
-            os.path.normpath(md_file_path),
-            os.path.normpath(os.path.abspath(md_file_path)),
-            os.path.normpath(os.path.relpath(md_file_path)),
-        ]))
+        candidates = _get_path_candidates(md_file_path)
         rows = []
         seen_ids = set()
         for candidate in candidates:

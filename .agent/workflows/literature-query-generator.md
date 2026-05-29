@@ -8,20 +8,23 @@ Generate validated academic search query strings for five major databases from a
 
 ---
 
-**Input**: A path to a Markdown file (e.g., `@[data/papers/summaries/my_paper_summary.md]`). Optionally specify `--exact-scopus` for Scopus exact-phrase mode, or `--force` to re-generate even if queries already exist.
+**Input**: A path to a literature file (Markdown `.md`, PDF `.pdf`, or DOCX `.docx`). Optionally specify `--exact-scopus` for Scopus exact-phrase mode, or `--force` to re-generate even if queries already exist.
 
 **Steps**
 
-1. **Select the input MD file**: Accept the file path from the user's argument. If omitted, list available files in `data/papers/summaries/` for selection.
-2. **Generate queries**: Run the format_queries script:
-   ```
-   python .agent/skills/literature-query-generator/scripts/format_queries.py <md_file_path> [--exact-scopus] [--force]
-   ```
-   This script:
-   - Extracts keywords from the MD file (`## Keywords` section first; falls back to bold text and headings)
-   - Builds per-database query strings (WoS, Scopus, Semantic Scholar, OpenAlex, CrossRef)
-   - Validates syntax for each database
-   - Checks for duplicates (skips if already generated, unless `--force` is used)
-   - Persists results to `data/research.db` in the `queries` table
-   - Prints results as JSON to stdout
-3. **Output**: Render the generated query strings in a formatted Markdown block in the chat window, grouped by database.
+1. **Routing and Format Handling**:
+   - **Case A: The input is a PDF or DOCX file**:
+     - Delegate to the `paper-summarizer` workflow to parse the paper, generate a structured Markdown card, and log it to SQLite.
+     - Capture the resulting `summary_id` and Markdown content.
+   - **Case B: The input is a Markdown file**:
+     - Normalize path and check if it already exists in the summaries database table. If so, retrieve its `summary_id`; otherwise, set `summary_id` to `null`.
+2. **Semantic Keyword Synthesis (LLM-driven)**:
+   - Read the entire Markdown summary content.
+   - Use LLM capability to semantically analyze the document's concepts and synthesize 3-10 optimal search keywords/phrases.
+3. **Generate and Store Queries**:
+   - Execute the formatting script, passing the synthesized keywords via the `--keywords` parameter:
+     ```bash
+     python .agent/skills/literature-query-generator/scripts/format_queries.py "<md_file_path>" --keywords "<comma_separated_keywords>" [--exact-scopus] [--force]
+     ```
+   - This script generates, validates, and stores queries for Web of Science, Scopus, Semantic Scholar, OpenAlex, and CrossRef.
+4. **Output**: Render the generated query strings in a formatted Markdown block in the chat window, grouped by database, indicating the associated summary ID.

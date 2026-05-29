@@ -195,13 +195,14 @@ def build_flat_query(keywords: list) -> dict:
 # Orchestration
 # ---------------------------------------------------------------------------
 
-def generate_all(md_file_path: str, exact_scopus: bool = False, force: bool = False) -> dict:
+def generate_all(md_file_path: str, exact_scopus: bool = False, force: bool = False, keywords_list: list = None) -> dict:
     """Generate and persist query strings for all five databases.
 
     Args:
         md_file_path: Path to the Markdown input file.
         exact_scopus: Use curly-brace exact mode for Scopus.
         force: Skip deduplication check and insert new rows.
+        keywords_list: Optional pre-extracted keyword terms to use.
 
     Returns a dict mapping database name → {'query': str} or {'error': str}.
     """
@@ -209,16 +210,20 @@ def generate_all(md_file_path: str, exact_scopus: bool = False, force: bool = Fa
     if not os.path.exists(md_file_path):
         return {db: {"error": f"File not found: {md_file_path}"} for db in DATABASES}
 
-    with open(md_file_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    if keywords_list:
+        keywords = keywords_list
+    else:
+        with open(md_file_path, "r", encoding="utf-8") as f:
+            content = f.read()
 
-    if not content.strip():
-        return {db: {"error": "Markdown file is empty"} for db in DATABASES}
+        if not content.strip():
+            return {db: {"error": "Markdown file is empty"} for db in DATABASES}
 
-    # Extract keywords
-    keywords = extract_keywords(content)
+        # Extract keywords
+        keywords = extract_keywords(content)
+
     if not keywords:
-        return {db: {"error": "Could not extract any keywords from the file"} for db in DATABASES}
+        return {db: {"error": "Could not extract or receive any keywords"} for db in DATABASES}
 
     # Build queries
     flat = build_flat_query(keywords)
@@ -281,7 +286,22 @@ if __name__ == "__main__":
         action="store_true",
         help="Re-generate and insert new rows even if duplicates exist",
     )
+    parser.add_argument(
+        "--keywords",
+        help="Comma- or semicolon-separated list of keywords to use, bypassing heuristic extraction",
+    )
     args = parser.parse_args()
 
-    output = generate_all(args.md_file_path, exact_scopus=args.exact_scopus, force=args.force)
+    keywords_list = None
+    if args.keywords:
+        keywords_list = [
+            k.strip() for k in re.split(r'[,;]+', args.keywords) if k.strip()
+        ]
+
+    output = generate_all(
+        args.md_file_path,
+        exact_scopus=args.exact_scopus,
+        force=args.force,
+        keywords_list=keywords_list
+    )
     print(json.dumps(output, ensure_ascii=False, indent=2))

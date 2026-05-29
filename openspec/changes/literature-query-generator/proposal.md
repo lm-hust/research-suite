@@ -4,9 +4,9 @@ Researchers currently translate paper summaries into complex Boolean search quer
 
 ## What Changes
 
-- Add a new agent skill `.agent/skills/literature-query-generator/` that accepts a Markdown file as input and outputs validated search queries for five academic databases.
+- Add a new agent skill `.agent/skills/literature-query-generator/` that accepts `.md`, `.pdf`, or `.docx` files. It routes `.md` inputs directly (linking to existing summaries if found, otherwise standalone with `summary_id = NULL`), and delegates `.pdf`/`.docx` inputs to `paper-summarizer` to generate a summary first, before synthesizing optimal keywords and outputting validated search queries for five academic databases.
 - Add a workflow trigger `.agent/workflows/literature-query-generator.md` registering the `/literature-query-generator` slash command.
-- Add a supporting Python script `.agent/skills/literature-query-generator/scripts/format_queries.py` implementing per-database query construction and lightweight syntax validation.
+- Add a supporting Python script `.agent/skills/literature-query-generator/scripts/format_queries.py` implementing parameter-based query construction, fallback heuristic parsing, and lightweight syntax validation.
 - Extend the shared `data/research.db` schema with a new `queries` table (nullable FK to `summaries.id`).
 - Ship `.agent/skills/literature-query-generator/assets/example.db` as a self-contained seed database containing the full schema (`papers` + `summaries` + `queries`), so the skill works in fresh-clone environments without depending on another skill's assets.
 
@@ -14,7 +14,7 @@ Researchers currently translate paper summaries into complex Boolean search quer
 
 ### New Capabilities
 
-- `query-generation`: Generate database-specific search query strings from a Markdown summary file. Produces separate, correctly-formatted query strings for Web of Science (`TS=(...)` with double-quote phrases), Scopus (`TITLE-ABS-KEY(...)` with double-quote fuzzy or curly-brace exact phrases), Semantic Scholar, OpenAlex, and CrossRef (flat keyword phrases).
+- `query-generation`: Generate database-specific search query strings from a Markdown summary file (or raw PDF/DOCX by first generating a summary). Uses the LLM to analyze the entire document semantically, extract/construct optimal keywords, and format them. Produces separate, correctly-formatted query strings for Web of Science (`TS=(...)` with double-quote phrases), Scopus (`TITLE-ABS-KEY(...)` with double-quote fuzzy or curly-brace exact phrases), Semantic Scholar, OpenAlex, and CrossRef (flat keyword phrases).
 - `query-storage`: Persist generated queries to `data/research.db` in a new `queries` table. Each row links to a `summaries.id` when the MD file originates from `paper-summarizer`; otherwise `summary_id` is NULL and `md_file_path` records the source file path directly.
 - `query-deduplication`: Prevent redundant re-generation by checking whether a query already exists for a given MD file + database combination before inserting a new row.
 

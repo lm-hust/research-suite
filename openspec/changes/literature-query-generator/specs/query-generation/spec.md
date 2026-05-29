@@ -1,19 +1,42 @@
 ## ADDED Requirements
 
-### Requirement: Accept any Markdown file as input
-The skill SHALL accept a path to any Markdown file as its sole required input. The file MAY be a structured summary card produced by `paper-summarizer` or an ad-hoc hand-written Markdown file. No specific front-matter or section structure SHALL be required.
+### Requirement: Input File Format Routing and Integration
+The skill SHALL support input file path routing based on format:
+1. If the input is a Markdown (`.md`) file, it SHALL check if it matches an existing summary in the database.
+2. If the input is a PDF (`.pdf`) or DOCX (`.docx`) file, it SHALL first run the `paper-summarizer` skill to generate a summary card, then generate queries from it.
 
-#### Scenario: Structured summary card input
-- **WHEN** the user provides a path to a Markdown file containing a `## Keywords` section
-- **THEN** the skill SHALL extract keyword terms from that section and use them as the basis for all query strings
+#### Scenario: Existing Markdown summary input
+- **WHEN** the input file is a Markdown (`.md`) file and its normalized path already exists in `summaries.summary_file_path`
+- **THEN** the skill SHALL generate queries from its content and persist them to `queries` linked to the existing `summary_id`
 
-#### Scenario: Ad-hoc hand-written Markdown input
-- **WHEN** the user provides a path to a Markdown file that does NOT contain a `## Keywords` section
-- **THEN** the skill SHALL fall back to extracting terms from bold text (`**term**`) and section headings (`##` and `###`), and use those terms as the basis for query strings
+#### Scenario: Standalone/Handwritten Markdown input
+- **WHEN** the input file is a Markdown (`.md`) file and its normalized path does NOT exist in `summaries.summary_file_path`
+- **THEN** the skill SHALL generate queries from its content and persist them to `queries` with `summary_id` set to `NULL` (and `md_file_path` set to the relative file path)
+
+#### Scenario: PDF or DOCX input paper
+- **WHEN** the input file has a `.pdf` or `.docx` extension
+- **THEN** the skill SHALL invoke the `paper-summarizer` skill, retrieve the resulting summary's `summary_id` and Markdown content, generate queries from that content, and persist them linked to the retrieved `summary_id`
+
+---
+
+### Requirement: LLM-Based Semantic Keyword Extraction
+The skill SHALL read the entire content of the Markdown file (either the existing/provided file, or the newly generated summary from the parser) and use the LLM to semantically analyze, select, and synthesize the most relevant search keywords.
+
+#### Scenario: Agent reads entire MD content for context
+- **WHEN** keyword generation is triggered
+- **THEN** the LLM SHALL read the entire Markdown content, analyze its context, and select the optimal set of search keywords
+
+#### Scenario: Passing keywords to CLI script
+- **WHEN** the agent runs the query generator script
+- **THEN** the agent SHALL pass the semantically-derived keywords via the `--keywords` parameter (comma-separated) to bypass local heuristic extraction
+
+#### Scenario: Script fallback when keywords parameter is absent
+- **WHEN** the script is run without the `--keywords` parameter
+- **THEN** it SHALL fall back to local heuristic extraction (parsing `## Keywords`, bold text, and headings) for backward compatibility
 
 #### Scenario: Empty or unreadable file
-- **WHEN** the provided Markdown file is empty or cannot be read
-- **THEN** the skill SHALL exit with an error message and SHALL NOT write any rows to the database
+- **WHEN** the input file is empty or cannot be read
+- **THEN** the skill SHALL exit with an error and SHALL NOT write any queries to the database
 
 ---
 
