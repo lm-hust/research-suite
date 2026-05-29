@@ -7,6 +7,19 @@ description: High-density scientific literature extraction, parsing, granular da
 
 This skill automates layout-aware text extraction and high-density academic fact extraction (Motivation, Methodology, Evaluation, Limitations) from papers, logs results into the SQLite `data/research.db` database, and archives summary Markdown cards under `data/papers/summaries/`.
 
+## Inputs & Outputs
+
+### Inputs
+- **Required**: A path to an academic paper (PDF, DOCX, TXT, or MD format).
+
+### Outputs
+Downstream callers (such as query generation workflows) invoking this skill SHALL expect and retrieve:
+1. **`paper_id`**: The unique identifier of the paper in the `papers` table.
+2. **`summary_id`**: The unique identifier of the latest summary run in the `summaries` table.
+   - **Multi-run Rule**: If a paper has multiple summarization records (e.g., when a summary file was deleted and recreated, generating a new run), the skill MUST return the **latest** `summary_id` (the largest ID value).
+3. **`summary_content`**: The full Markdown text content of the summary card.
+4. **`summary_file_path`**: The file path to the Markdown summary card on disk.
+
 ---
 
 ## Workflow Steps
