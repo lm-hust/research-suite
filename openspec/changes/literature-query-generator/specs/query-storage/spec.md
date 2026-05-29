@@ -17,3 +17,11 @@ CREATE TABLE IF NOT EXISTS queries (
 - **Scenario: Persist queries**
   - **WHEN** query generation succeeds
   - **THEN** it SHALL write 5 query rows (one per database) linked to `summary_id`.
+
+### Requirement: Database Check and Replacement Precondition
+- **Scenario: Database lacks queries table**
+  - **WHEN** `data/research.db` is missing, OR it exists but does NOT contain the `queries` table
+  - **THEN** the workflow SHALL delete the existing database file (if present) and copy `assets/example.db` to `data/research.db` before executing or delegating to the `paper-summarizer` skill.
+- **Scenario: Database contains queries table**
+  - **WHEN** `data/research.db` already contains the `queries` table
+  - **THEN** the workflow SHALL proceed to execute/delegate without modifying the database file.
