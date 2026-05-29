@@ -1,30 +1,28 @@
+# Proposal: Simplified Literature Query Generator
+
 ## Why
 
-Researchers currently translate paper summaries into complex Boolean search queries by hand — a slow, error-prone process involving mismatched brackets, wrong field tags, and invalid wildcard symbols. A dedicated skill that automatically generates syntactically validated search expressions from any Markdown summary (whether produced by `paper-summarizer` or hand-written) eliminates this friction and makes retrieval reproducible.
+Researchers need to build Boolean search queries for multiple academic databases based on literature summaries. The previous design was over-complicated, handling complex path routing, standalone markdown lookups, and nullable database fields. By refactoring the process to **always** run the `paper-summarizer` skill first (which parses the input and logs a valid summary row), we simplify query generation into a single deterministic flow: generating search queries linked to a guaranteed, non-null `summary_id`.
 
 ## What Changes
 
-- Add a new agent skill `.agent/skills/literature-query-generator/` that accepts `.md`, `.pdf`, or `.docx` files. It routes `.md` inputs directly (linking to existing summaries if found, otherwise standalone with `summary_id = NULL`), and delegates `.pdf`/`.docx` inputs to `paper-summarizer` to generate a summary first, before synthesizing optimal keywords and outputting validated search queries for five academic databases.
-- Add a workflow trigger `.agent/workflows/literature-query-generator.md` registering the `/literature-query-generator` slash command.
-- Add a supporting Python script `.agent/skills/literature-query-generator/scripts/format_queries.py` implementing parameter-based query construction, fallback heuristic parsing, and lightweight syntax validation.
-- Extend the shared `data/research.db` schema with a new `queries` table (nullable FK to `summaries.id`).
-- Ship `.agent/skills/literature-query-generator/assets/example.db` as a self-contained seed database containing the full schema (`papers` + `summaries` + `queries`), so the skill works in fresh-clone environments without depending on another skill's assets.
+- **Simplified Routing**: The `/literature-query-generator` command accepts any input file (`.pdf`, `.docx`, `.md`, `.txt`) and immediately delegates it to the `paper-summarizer` skill.
+- **Unified Query Generation**: The workflow retrieves the `summary_id` and `summary_content` returned by `paper-summarizer`, uses LLM semantic keyword synthesis on the summary content, and runs a streamlined Python script to format and persist the queries.
+- **Streamlined Database Schema**: The `queries` table is simplified to use a non-null foreign key `summary_id` referencing `summaries(id)`. We remove the `md_file_path` column entirely.
+- **Workflow Command**: The workflow trigger `.agent/workflows/literature-query-generator.md` is updated to implement this direct calling chain.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `query-generation`: Generate database-specific search query strings from a Markdown summary file (or raw PDF/DOCX by first generating a summary). Uses the LLM to analyze the entire document semantically, extract/construct optimal keywords, and format them. Produces separate, correctly-formatted query strings for Web of Science (`TS=(...)` with double-quote phrases), Scopus (`TITLE-ABS-KEY(...)` with double-quote fuzzy or curly-brace exact phrases), Semantic Scholar, OpenAlex, and CrossRef (flat keyword phrases).
-- `query-storage`: Persist generated queries to `data/research.db` in a new `queries` table. Each row links to a `summaries.id` when the MD file originates from `paper-summarizer`; otherwise `summary_id` is NULL and `md_file_path` records the source file path directly.
-- `query-deduplication`: Prevent redundant re-generation by checking whether a query already exists for a given MD file + database combination before inserting a new row.
+- `query-generation`: Generate correctly formatted query strings for Web of Science, Scopus, Semantic Scholar, OpenAlex, and CrossRef from the summary card content.
+- `query-storage`: Persist queries in a simplified table linked directly to a non-null `summary_id`.
 
 ### Modified Capabilities
 
-<!-- No existing spec-level behavior changes. -->
+- None (deletes the old, complex routing and standalone Markdown handling capabilities).
 
 ## Impact
 
-- **New files**: `.agent/skills/literature-query-generator/SKILL.md`, `scripts/format_queries.py`, `assets/example.db`; `.agent/workflows/literature-query-generator.md`.
-- **Database**: `data/research.db` gains a `queries` table; existing `papers` and `summaries` tables are untouched.
-- **Dependencies**: No new Python packages required beyond the standard library (`sqlite3`, `re`, `json`, `hashlib`).
-- **Other skills**: `paper-summarizer` is unmodified. The new skill reads from `summaries` via `summary_file_path` lookup but does not write to any existing table.
+- **Database**: The `queries` schema is simplified (no `md_file_path` column, non-null `summary_id` foreign key).
+- **Code Cleanliness**: The CLI script and helper functions in `format_queries.py` and `db_logger.py` are stripped of path normalization and standalone file lookup logic.
