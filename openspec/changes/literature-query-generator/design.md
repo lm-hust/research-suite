@@ -42,8 +42,8 @@ CREATE TABLE IF NOT EXISTS queries (
 **Rationale:** Simplifies lookup query to `SELECT 1 FROM queries WHERE summary_id = ? AND database = ? LIMIT 1`.
 
 ### Decision 4: Database Check and Replacement Precondition
-**Choice:** Before initiating execution or calling the `paper-summarizer` skill, check if `data/research.db` exists and contains the `queries` table. If the database file does not exist, or if it exists but does NOT contain the `queries` table, delete the database file (if present) and copy `assets/example.db` to `data/research.db`.
-**Rationale:** Ensures that the SQLite database file contains the correct three-table schema (`papers`, `summaries`, and `queries`) before any operations run, preventing issues when running against an older database that lacks the `queries` table.
+**Choice:** Before initiating execution or calling the `paper-summarizer` skill, check if `data/research.db` exists and contains the `queries` table. If the database file does not exist, or if it exists but does NOT contain the `queries` table, delete the database file (if present), copy the existing `.agent/skills/paper-summarizer/assets/example.db` to `data/research.db`, and programmatically create the `queries` table inside it using a SQL statement.
+**Rationale:** Reuses the existing `example.db` template from the `paper-summarizer` skill instead of duplicating binary assets inside the new skill's directory, ensuring a clean and consistent database state.
 
 ## Risks / Trade-offs
 

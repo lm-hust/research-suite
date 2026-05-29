@@ -7,10 +7,9 @@
 ## 2. Re-Scaffold Simplified Skill
 - [ ] 2.1 Create `.agent/skills/literature-query-generator/` directory with `__init__.py` and the new `SKILL.md`
 - [ ] 2.2 Create `.agent/workflows/literature-query-generator.md` workflow trigger registering `/literature-query-generator`
-- [ ] 2.3 Create `assets/example.db` containing the updated three-table schema (`papers`, `summaries`, `queries` where `queries.summary_id` is NOT NULL REFERENCES summaries(id) ON DELETE CASCADE)
 
 ## 3. Implement Simplified scripts/db_logger.py
-- [ ] 3.1 Implement `init_db()`: check if `data/research.db` exists and has `queries` table. If not, delete it (if exists) and copy `assets/example.db` to seed the database.
+- [ ] 3.1 Implement `init_db()`: check if `data/research.db` exists and has `queries` table. If not, delete it (if exists), copy `.agent/skills/paper-summarizer/assets/example.db` to `data/research.db`, and run the SQL statement to create the `queries` table.
 - [ ] 3.2 Implement `check_duplicate(summary_id, database)`: Check duplicate strictly by `(summary_id, database)`
 - [ ] 3.3 Implement `store_query(summary_id, database, query_string)`: Store queries linked to `summary_id`
 - [ ] 3.4 Implement `get_queries_for_md(md_file_path)`: Find the latest `summary_id` from the path and get all query records associated with it

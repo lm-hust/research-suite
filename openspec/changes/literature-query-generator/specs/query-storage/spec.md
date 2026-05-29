@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS queries (
 ### Requirement: Database Check and Replacement Precondition
 - **Scenario: Database lacks queries table**
   - **WHEN** `data/research.db` is missing, OR it exists but does NOT contain the `queries` table
-  - **THEN** the workflow SHALL delete the existing database file (if present) and copy `assets/example.db` to `data/research.db` before executing or delegating to the `paper-summarizer` skill.
+  - **THEN** the workflow SHALL delete the existing database file (if present), copy `.agent/skills/paper-summarizer/assets/example.db` to `data/research.db`, and programmatically create the `queries` table inside it before executing or delegating to the `paper-summarizer` skill.
 - **Scenario: Database contains queries table**
   - **WHEN** `data/research.db` already contains the `queries` table
   - **THEN** the workflow SHALL proceed to execute/delegate without modifying the database file.
