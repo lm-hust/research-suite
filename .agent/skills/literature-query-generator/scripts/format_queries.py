@@ -1,307 +1,152 @@
 """
 format_queries.py — literature-query-generator
 
-Extracts keywords from a Markdown file and builds validated search query
-strings for five academic databases:
-  - WOS   : Web of Science  — TS=("kw1" AND "kw2")
-  - Scopus : Scopus          — TITLE-ABS-KEY("kw1" AND "kw2") or with {}
-  - SS     : Semantic Scholar — flat keyword phrase
-  - OA     : OpenAlex        — flat keyword phrase
-  - CR     : CrossRef        — flat keyword phrase
-
-Usage:
-    python format_queries.py <md_file_path> [--exact-scopus] [--force]
-
-Prints a JSON object mapping database name → query string (or error).
-Also persists results to data/research.db via db_logger.
+Generates syntactically validated search queries from keywords,
+stores them in SQLite, and outputs them as JSON.
 """
 import sys
-import os
-import re
-import json
 import argparse
+import json
+import re
+import os
 
-# Ensure scripts/ dir is on path when run as a script
-sys.path.insert(0, os.path.dirname(__file__))
+# Import db_logger functions directly
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import db_logger
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
 
-DATABASES = ["WOS", "Scopus", "SemanticScholar", "OpenAlex", "CrossRef"]
-MAX_FLAT_KEYWORDS = 10
-
-
-# ---------------------------------------------------------------------------
-# Keyword extraction
-# ---------------------------------------------------------------------------
-
-def extract_keywords(md_content: str) -> list:
-    """Extract a list of search keyword strings from Markdown content.
-
-    Strategy (two-tier):
-    1. Look for a '## Keywords' section and parse its content as a
-       comma/semicolon/newline-separated list.
-    2. Fall back to collecting bold phrases (**text**) and section
-       headings (## and ###) when no Keywords section is present.
-
-    Returns a deduplicated list of non-empty strings, preserving order.
-    """
-    keywords = []
-
-    # Tier 1: explicit Keywords section
-    kw_match = re.search(
-        r'(?:^|\n)#{1,4}\s*keywords?\s*\n(.*?)(?=\n#{1,4}\s|\Z)',
-        md_content,
-        re.IGNORECASE | re.DOTALL
-    )
-    if kw_match:
-        block = kw_match.group(1)
-        # Split on commas, semicolons, newlines, bullet markers
-        raw = re.split(r'[,;\n]+', block)
-        for item in raw:
-            item = re.sub(r'^[\s\-\*\•]+', '', item).strip()
-            # Strip markdown bold/italic
-            item = re.sub(r'\*+', '', item).strip()
-            if item:
-                keywords.append(item)
-
-    if keywords:
-        return _deduplicate(keywords)
-
-    # Tier 2: bold phrases then headings
-    # Filter out metadata-style labels (short single-token labels like "Authors:", "Year:")
-    # These appear in paper-summarizer cards but are not searchable concepts.
-    METADATA_LABELS = {
-        'file name', 'file path', 'authors', 'year', 'metadata',
-        'author', 'date', 'doi', 'journal', 'volume', 'pages',
-        'publisher', 'issn', 'isbn', 'url', 'source'
-    }
-
-    # Bold: **phrase** or __phrase__
-    bold_matches = re.findall(r'\*\*(.+?)\*\*|__(.+?)__', md_content)
-    for m in bold_matches:
-        term = (m[0] or m[1]).strip()
-        # Skip short metadata labels and terms with only punctuation/digits
-        if term and term.lower() not in METADATA_LABELS and len(term) > 3:
-            keywords.append(term)
-
-    # Headings (##, ###) — skip the top-level title (#)
-    heading_matches = re.findall(r'^#{2,3}\s+(.+)', md_content, re.MULTILINE)
-    for h in heading_matches:
-        term = h.strip()
-        # Filter out common structural and metadata headings
-        skip = {'keywords', 'abstract', 'introduction', 'conclusion',
-                 'references', 'methodology', 'results', 'discussion',
-                 'background', 'related work', 'acknowledgements',
-                 'metadata', 'authors', 'year', 'file name', 'file path'}
-        if term.lower() not in skip:
-            keywords.append(term)
-
-    return _deduplicate(keywords)
+def sanitize_term(term: str) -> str:
+    """Strip quotes and leading/trailing spaces from a keyword term."""
+    t = term.strip()
+    # Strip quotes if term is wrapped in them
+    if (t.startswith('"') and t.endswith('"')) or (t.startswith("'") and t.endswith("'")):
+        t = t[1:-1].strip()
+    return t
 
 
-def _deduplicate(lst: list) -> list:
-    seen = set()
-    out = []
-    for item in lst:
-        key = item.lower()
-        if key not in seen:
-            seen.add(key)
-            out.append(item)
-    return out
+def build_wos_query(keywords: list) -> str:
+    """Format Web of Science Advanced Search query."""
+    sanitized = [sanitize_term(k) for k in keywords if sanitize_term(k)]
+    if not sanitized:
+        return ""
+    terms_str = " AND ".join(f'"{k}"' for k in sanitized)
+    query = f"TS=({terms_str})"
+
+    # Validate
+    if query.count("(") != query.count(")"):
+        raise ValueError("Balanced parentheses validation failed for Web of Science query.")
+    if "{" in query or "}" in query:
+        raise ValueError("Illegal curly braces found in Web of Science query.")
+
+    return query
 
 
-# ---------------------------------------------------------------------------
-# Query builders
-# ---------------------------------------------------------------------------
-
-def _validate_balanced(query: str, open_char='(', close_char=')') -> bool:
-    depth = 0
-    for ch in query:
-        if ch == open_char:
-            depth += 1
-        elif ch == close_char:
-            depth -= 1
-            if depth < 0:
-                return False
-    return depth == 0
-
-
-def build_wos_query(keywords: list) -> dict:
-    """Build a Web of Science TS= Boolean query.
-
-    Format: TS=("kw1" AND "kw2" AND ...)
-    Returns {'query': str} on success, {'error': str} on failure.
-    """
-    if not keywords:
-        return {"error": "No keywords extracted"}
-
-    terms = ' AND '.join(f'"{kw}"' for kw in keywords)
-    query = f'TS=({terms})'
-
-    # Validation: balanced parentheses, no curly braces
-    if not _validate_balanced(query):
-        return {"error": f"WOS query has unbalanced parentheses: {query}"}
-    if '{' in query or '}' in query:
-        return {"error": f"WOS query contains illegal characters: {query}"}
-
-    return {"query": query}
-
-
-def build_scopus_query(keywords: list, exact: bool = False) -> dict:
-    """Build a Scopus TITLE-ABS-KEY Boolean query.
-
-    Default (fuzzy) mode:  TITLE-ABS-KEY("kw1" AND "kw2")
-    Exact mode:            TITLE-ABS-KEY({kw1} AND {kw2})
-
-    In exact mode, wildcards (* ?) are stripped from terms.
-    Returns {'query': str} on success, {'error': str} on failure.
-    """
-    if not keywords:
-        return {"error": "No keywords extracted"}
+def build_scopus_query(keywords: list, exact: bool = False) -> str:
+    """Format Scopus Advanced Search query."""
+    sanitized = [sanitize_term(k) for k in keywords if sanitize_term(k)]
+    if not sanitized:
+        return ""
 
     if exact:
-        # Curly braces, no wildcards allowed
-        cleaned = [re.sub(r'[*?]', '', kw) for kw in keywords]
-        terms = ' AND '.join(f'{{{kw}}}' for kw in cleaned)
+        # Exact-phrase mode: wrapped in curly braces
+        for k in sanitized:
+            if "*" in k or "?" in k:
+                raise ValueError("Wildcards are not permitted inside Scopus exact curly braces.")
+        terms_str = " AND ".join(f"{{{k}}}" for k in sanitized)
     else:
-        terms = ' AND '.join(f'"{kw}"' for kw in keywords)
+        # Default fuzzy mode: double quotes
+        terms_str = " AND ".join(f'"{k}"' for k in sanitized)
 
-    query = f'TITLE-ABS-KEY({terms})'
+    query = f"TITLE-ABS-KEY({terms_str})"
 
-    if not _validate_balanced(query):
-        return {"error": f"Scopus query has unbalanced parentheses: {query}"}
+    # Validate
+    if query.count("(") != query.count(")"):
+        raise ValueError("Balanced parentheses validation failed for Scopus query.")
     if not query.startswith("TITLE-ABS-KEY("):
-        return {"error": f"Scopus query missing TITLE-ABS-KEY opener: {query}"}
+        raise ValueError("Invalid Scopus query prefix.")
 
-    return {"query": query}
-
-
-def build_flat_query(keywords: list) -> dict:
-    """Build a space-separated flat keyword string (Semantic Scholar / OpenAlex / CrossRef).
-
-    Uses at most MAX_FLAT_KEYWORDS terms.
-    """
-    if not keywords:
-        return {"error": "No keywords extracted"}
-
-    selected = keywords[:MAX_FLAT_KEYWORDS]
-    return {"query": " ".join(selected)}
+    return query
 
 
-# ---------------------------------------------------------------------------
-# Orchestration
-# ---------------------------------------------------------------------------
+def build_flat_query(keywords: list) -> str:
+    """Format a space-separated string of the first 10 keywords."""
+    sanitized = [sanitize_term(k) for k in keywords if sanitize_term(k)]
+    # Use only first 10 terms
+    truncated = sanitized[:10]
+    return " ".join(truncated)
 
-def generate_all(md_file_path: str, exact_scopus: bool = False, force: bool = False, keywords_list: list = None) -> dict:
-    """Generate and persist query strings for all five databases.
 
-    Args:
-        md_file_path: Path to the Markdown input file.
-        exact_scopus: Use curly-brace exact mode for Scopus.
-        force: Skip deduplication check and insert new rows.
-        keywords_list: Optional pre-extracted keyword terms to use.
+def generate_all(summary_id: int, keywords_list: list, exact_scopus: bool = False, force: bool = False) -> dict:
+    """Generate, validate, and store search queries for the 5 databases."""
+    db_logger.init_db()
 
-    Returns a dict mapping database name → {'query': str} or {'error': str}.
-    """
-    # Read MD file
-    if not os.path.exists(md_file_path):
-        return {db: {"error": f"File not found: {md_file_path}"} for db in DATABASES}
+    # Generate queries
+    wos_q = build_wos_query(keywords_list)
+    scopus_q = build_scopus_query(keywords_list, exact=exact_scopus)
+    flat_q = build_flat_query(keywords_list)
 
-    if keywords_list:
-        keywords = keywords_list
-    else:
-        with open(md_file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        if not content.strip():
-            return {db: {"error": "Markdown file is empty"} for db in DATABASES}
-
-        # Extract keywords
-        keywords = extract_keywords(content)
-
-    if not keywords:
-        return {db: {"error": "Could not extract or receive any keywords"} for db in DATABASES}
-
-    # Build queries
-    flat = build_flat_query(keywords)
-    results = {
-        "WOS": build_wos_query(keywords),
-        "Scopus": build_scopus_query(keywords, exact=exact_scopus),
-        "SemanticScholar": flat,
-        "OpenAlex": flat,
-        "CrossRef": flat,
+    targets = {
+        "WOS": wos_q,
+        "Scopus": scopus_q,
+        "SemanticScholar": flat_q,
+        "OpenAlex": flat_q,
+        "CrossRef": flat_q,
     }
 
-    # Resolve summary_id (None for hand-written MDs)
-    summary_id = db_logger.resolve_summary_id(md_file_path)
+    results = {
+        "_meta": {
+            "summary_id": summary_id,
+            "keywords_extracted": keywords_list,
+            "exact_scopus": exact_scopus,
+            "force": force
+        }
+    }
 
-    # Persist to DB (with deduplication)
-    db_logger.init_db()
-    for db_name, result in results.items():
-        if "error" in result:
-            continue  # Don't store failed queries
-
-        if not force and db_logger.check_duplicate(summary_id, md_file_path, db_name):
-            result["skipped"] = True
-            result["reason"] = "duplicate"
+    for db_name, query_string in targets.items():
+        if not query_string:
+            results[db_name] = {"error": "Empty query generated"}
             continue
 
-        new_id = db_logger.store_query(
-            summary_id, md_file_path, db_name, result["query"]
-        )
-        result["stored_id"] = new_id
+        try:
+            # Check duplicate
+            is_dup = db_logger.check_duplicate(summary_id, db_name)
+            if is_dup and not force:
+                results[db_name] = {
+                    "query": query_string,
+                    "skipped": True,
+                    "reason": "duplicate"
+                }
+            else:
+                new_id = db_logger.store_query(summary_id, db_name, query_string)
+                results[db_name] = {
+                    "query": query_string,
+                    "stored_id": new_id
+                }
+        except Exception as e:
+            results[db_name] = {
+                "query": query_string,
+                "error": str(e)
+            }
 
-    # Add metadata
-    return {
-        "_meta": {
-            "md_file": md_file_path,
-            "summary_id": summary_id,
-            "keywords_extracted": keywords,
-            "exact_scopus": exact_scopus,
-            "force": force,
-        },
-        **results,
-    }
+    return results
 
-
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Generate academic database search queries from a Markdown file."
-    )
-    parser.add_argument("md_file_path", help="Path to the input Markdown file")
-    parser.add_argument(
-        "--exact-scopus",
-        action="store_true",
-        help="Use Scopus exact phrase mode (curly braces, no wildcards)",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Re-generate and insert new rows even if duplicates exist",
-    )
-    parser.add_argument(
-        "--keywords",
-        help="Comma- or semicolon-separated list of keywords to use, bypassing heuristic extraction",
-    )
+    parser = argparse.ArgumentParser(description="Generate and store academic database queries.")
+    parser.add_argument("summary_id", type=int, help="The target summaries.id to link the queries to.")
+    parser.add_argument("--keywords", type=str, required=True, help="Comma-separated keywords to build queries with.")
+    parser.add_argument("--exact-scopus", action="store_true", help="Use Scopus exact-phrase curly braces.")
+    parser.add_argument("--force", action="store_true", help="Bypass deduplication checks and force insert.")
+
     args = parser.parse_args()
 
-    keywords_list = None
-    if args.keywords:
-        keywords_list = [
-            k.strip() for k in re.split(r'[,;]+', args.keywords) if k.strip()
-        ]
+    # Parse comma separated keywords
+    kw_raw = args.keywords.split(",")
+    kws = [sanitize_term(k) for k in kw_raw if sanitize_term(k)]
 
-    output = generate_all(
-        args.md_file_path,
-        exact_scopus=args.exact_scopus,
-        force=args.force,
-        keywords_list=keywords_list
-    )
-    print(json.dumps(output, ensure_ascii=False, indent=2))
+    if not kws:
+        print(json.dumps({"error": "No valid keywords provided."}))
+        sys.exit(1)
+
+    output = generate_all(args.summary_id, kws, exact_scopus=args.exact_scopus, force=args.force)
+    print(json.dumps(output, indent=2))
