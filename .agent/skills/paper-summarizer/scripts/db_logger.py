@@ -10,12 +10,32 @@ DB_PATH = os.path.join(DB_DIR, "research.db")
 def init_db():
     os.makedirs(DB_DIR, exist_ok=True)
     
-    # Auto-fallback: if research.db is missing but example.db exists in skill assets, copy it
-    example_path = os.path.join(".agent", "skills", "paper-summarizer", "assets", "example.db")
-    if not os.path.exists(DB_PATH) and os.path.exists(example_path):
-        import shutil
-        shutil.copy(example_path, DB_PATH)
-        
+    valid = False
+    if os.path.exists(DB_PATH):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='papers'")
+            has_papers = cursor.fetchone() is not None
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='summaries'")
+            has_summaries = cursor.fetchone() is not None
+            conn.close()
+            if has_papers and has_summaries:
+                valid = True
+        except Exception:
+            pass
+            
+    if not valid:
+        if os.path.exists(DB_PATH):
+            try:
+                os.remove(DB_PATH)
+            except Exception:
+                pass
+        example_path = os.path.join(".agent", "skills", "paper-summarizer", "assets", "example.db")
+        if os.path.exists(example_path):
+            import shutil
+            shutil.copy(example_path, DB_PATH)
+            
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
