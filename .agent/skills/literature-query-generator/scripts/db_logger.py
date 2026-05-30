@@ -5,6 +5,15 @@ Manages the `queries` table in data/research.db.
 """
 import sys
 import os
+
+if sys.platform == 'win32':
+    qgis_bin = r"C:\Program Files\QGIS 3.44.0\bin"
+    if os.path.exists(qgis_bin):
+        try:
+            os.add_dll_directory(qgis_bin)
+        except Exception:
+            pass
+
 import sqlite3
 import json
 import shutil
