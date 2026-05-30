@@ -5,6 +5,8 @@ __pycache__/
 
 # Local data databases and files (ignore databases and all documents/summaries)
 data/*.db
+data/*.pdf
+data/*.docx
 data/papers/*
 !data/papers/summaries/
 data/papers/summaries/*
